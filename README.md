@@ -2,7 +2,7 @@
 
 Solutions created using C# and .NET 5.
 
-To run a specifid day, for example day1 use the following:
+To run a specific day, for example day1 use the following:
 
 ```sh
 dotnet run -p src/day1 -c Release
