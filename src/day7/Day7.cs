@@ -8,42 +8,160 @@ var inputString = await File.ReadAllTextAsync("inputs/day7.txt");
 
 Console.WriteLine($"Running day7");
 
-Console.WriteLine(Bag.From("posh teal bags contain 2 faded coral bags, 3 striped crimson bags, 1 faded red bag."));
+var data = Parse(inputString);
 
-Part1();
-Part2();
+Part1(data);
+Part2(data);
 
-static void Part1()
+static BagData Parse(string input)
+{
+    return BagData.From(input);
+}
+
+static void Part1(BagData input)
 {
     Console.WriteLine($"Part1: Running day7");
+
+    var bagToSearch = new Bag("shiny gold");
+
+    var bags = input.BagsWhichCanContain(bagToSearch).ToHashSet();
+
+    Console.WriteLine($"Part1: Found {bags.Count} bags for {bagToSearch}");
 
     Console.WriteLine($"Part1: Finished day7");
 }
 
-static void Part2()
+static void Part2(BagData input)
 {
     Console.WriteLine($"Part2: Running day7");
+
+    var bagToSearch = new Bag("shiny gold");
+
+    Console.WriteLine($"Part2: {bagToSearch} contains {input.CountTotalBagsFor(bagToSearch)} bags");
 
     Console.WriteLine($"Part2: Finished day7");
 }
 
-
-public record Bag
+public class BagData
 {
-    public Bag()
+    public Dictionary<Bag, ValueList<(int Count, Bag Bag)>> Bags { get; } = new();
+
+    public Dictionary<Bag, ValueList<Bag>> Parents { get; } = new();
+
+    public int CountTotalBagsFor(Bag bagToSearch)
     {
+        if (!Bags.ContainsKey(bagToSearch))
+        {
+            return 0;
+        }
+
+        var bags = Bags[bagToSearch];
+
+        int total = 0;
+
+        foreach (var (count, bag) in bags)
+        {
+            var subTotal = CountTotalBagsFor(bag);
+
+            total += count;
+            total += count * subTotal;
+        }
+
+        return total;
     }
 
-    public Bag(string color)
+    public IEnumerable<Bag> BagsWhichCanContain(Bag bagToSearch)
     {
-        Color = color;
+        if (!Parents.ContainsKey(bagToSearch))
+        {
+            return Enumerable.Empty<Bag>();
+        }
+
+        var parents = Parents[bagToSearch];
+
+        var children = parents.SelectMany(BagsWhichCanContain);
+
+        return parents.Union(children).ToHashSet();
     }
 
-    public string Color { get; init; } = "";
+    public override string ToString()
+    {
 
-    public ValueList<(int Count, Bag Bag)> Bags { get; init; } = new();
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append(GetType().Name);
+        stringBuilder.Append('{');
 
-    public static Bag From(string input)
+        bool first = true;
+
+        foreach (var item in Bags)
+        {
+            if (first)
+            {
+                first = false;
+            }
+            else
+            {
+                stringBuilder.Append(", ");
+            }
+            stringBuilder.Append('{').Append(item).Append('}');
+        }
+
+        stringBuilder.Append('}');
+
+        return stringBuilder.ToString();
+    }
+
+    public static BagData From(string input)
+    {
+        var lines = input
+            .Replace("\r", "")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        BagData result = new();
+
+        foreach (var bag in lines.Select(Bag.From))
+        {
+            result.AddBag(bag.Bag, bag.Bags);
+        }
+
+        return result;
+    }
+
+    public void AddBag(Bag bag, ValueList<(int Count, Bag Bag)> bags)
+    {
+        if (Bags.ContainsKey(bag))
+        {
+            Bags[bag].AddRange(bags);
+        }
+        else
+        {
+            Bags[bag] = bags;
+        }
+
+        foreach (var b in bags)
+        {
+            AddBag(b.Bag, new());
+            AddParent(b.Bag, bag);
+        }
+    }
+
+    public void AddParent(Bag bag, Bag parent)
+    {
+        if (Parents.ContainsKey(bag))
+        {
+            Parents[bag].Add(parent);
+        }
+        else
+        {
+            Parents[bag] = new() { parent };
+        }
+    }
+}
+
+
+public record Bag(string Color)
+{
+    public static (Bag Bag, ValueList<(int Count, Bag Bag)> Bags) From(string input)
     {
         const string ContainText = "bags contain";
 
@@ -53,7 +171,7 @@ public record Bag
 
         if (input.EndsWith("no other bags."))
         {
-            return new Bag(color);
+            return (new Bag(color), new());
         }
 
         var restOfTheBags = input[(containIndex + ContainText.Length + 1)..]
@@ -61,10 +179,9 @@ public record Bag
             .Select(it => it.Trim(new[] { ' ', '.' }))
             .ToList();
 
-        Console.WriteLine($"parts {string.Join("|", restOfTheBags)}");
-
         var subBags = restOfTheBags
-            .Select(text => {
+            .Select(text =>
+            {
                 var digits = string.Join("", text.TakeWhile(char.IsDigit));
                 int count = int.Parse(digits);
 
@@ -76,10 +193,7 @@ public record Bag
             })
             .ToValueList();
 
-        return new Bag(color)
-        {
-            Bags = subBags,
-        };
+        return (new Bag(color), subBags);
     }
 }
 
@@ -107,6 +221,11 @@ public class ValueList<T> : IEnumerable<T>, System.Collections.IEnumerable, IEqu
     public void Add(T value)
     {
         _items.Add(value);
+    }
+
+    public void AddRange(IEnumerable<T> collection)
+    {
+        _items.AddRange(collection);
     }
 
     public IEnumerator<T> GetEnumerator()
